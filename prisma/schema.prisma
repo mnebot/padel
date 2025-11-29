@@ -1,0 +1,171 @@
+// Prisma schema file for Gestió de Reserves de Pàdel
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserType {
+  MEMBER      // Soci
+  NON_MEMBER  // No Soci
+}
+
+enum TimeSlotType {
+  OFF_PEAK  // Hora Vall
+  PEAK      // Hora Punta
+}
+
+enum BookingStatus {
+  REQUESTED  // Sol·licitada
+  CONFIRMED  // Confirmada
+  CANCELLED  // Cancel·lada
+  COMPLETED  // Completada
+}
+
+// Models
+model User {
+  id                    String                @id @default(uuid())
+  name                  String
+  email                 String                @unique
+  password              String                // Hashed password
+  type                  UserType
+  isAdmin               Boolean               @default(false)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  
+  // Relations
+  bookingRequests       BookingRequest[]
+  bookings              Booking[]             // Reserves creades per l'usuari
+  bookingParticipations BookingParticipant[]  // Reserves on participa
+  requestParticipations RequestParticipant[]  // Sol·licituds on participa
+  usageCounter          UsageCounter?
+  
+  @@index([email])
+  @@index([type])
+  @@index([isAdmin])
+}
+
+model Court {
+  id          String    @id @default(uuid())
+  name        String
+  description String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  bookings    Booking[]
+  
+  @@index([isActive])
+}
+
+model TimeSlot {
+  id          String        @id @default(uuid())
+  dayOfWeek   Int           // 0-6 (Diumenge-Dissabte)
+  startTime   String        // Format: "HH:mm"
+  endTime     String        // Format: "HH:mm"
+  duration    Int           // Minuts
+  type        TimeSlotType
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  @@index([dayOfWeek])
+  @@index([type])
+}
+
+model BookingRequest {
+  id              String                @id @default(uuid())
+  userId          String                // Usuari que crea la sol·licitud
+  date            DateTime
+  timeSlot        String                // "HH:mm"
+  numberOfPlayers Int
+  status          BookingStatus         @default(REQUESTED)
+  weight          Float?                // Calculat pel motor de sorteig
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  
+  // Relations
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking         Booking?
+  participants    RequestParticipant[]  @relation("RequestToParticipants")
+  
+  @@index([userId])
+  @@index([date, status])
+  @@index([status])
+}
+
+model Booking {
+  id              String               @id @default(uuid())
+  userId          String               // Usuari que crea la reserva
+  courtId         String
+  date            DateTime
+  timeSlot        String               // "HH:mm"
+  numberOfPlayers Int
+  status          BookingStatus        @default(CONFIRMED)
+  requestId       String?              @unique // Si ve d'una sol·licitud
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  
+  // Relations
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  court           Court                @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  request         BookingRequest?      @relation(fields: [requestId], references: [id])
+  participants    BookingParticipant[] @relation("BookingToParticipants")
+  
+  @@index([userId])
+  @@index([courtId, date, timeSlot])
+  @@index([date, status])
+  @@index([status])
+  @@unique([courtId, date, timeSlot, status], name: "unique_active_booking")
+}
+
+model UsageCounter {
+  userId        String   @id
+  count         Int      @default(0)
+  lastResetDate DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([count])
+}
+
+// Taula intermèdia per participants de reserves
+model BookingParticipant {
+  id        String   @id @default(uuid())
+  bookingId String
+  userId    String
+  createdAt DateTime @default(now())
+  
+  // Relations
+  booking   Booking  @relation("BookingToParticipants", fields: [bookingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([bookingId, userId])
+  @@index([bookingId])
+  @@index([userId])
+}
+
+// Taula intermèdia per participants de sol·licituds
+model RequestParticipant {
+  id        String         @id @default(uuid())
+  requestId String
+  userId    String
+  createdAt DateTime       @default(now())
+  
+  // Relations
+  request   BookingRequest @relation("RequestToParticipants", fields: [requestId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([requestId, userId])
+  @@index([requestId])
+  @@index([userId])
+}
