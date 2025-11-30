@@ -6,15 +6,15 @@
   "scripts": {
     "build": "tsc",
     "build:frontend": "cd user-app && npm run build && cd ../admin-app && npm run build",
-    "dev": "ts-node src/index.ts",
+    "dev": "ts-node -r dotenv/config src/index.ts",
     "dev:frontend": "node server.js",
     "start": "npm run build && npm run build:frontend && node dist/index.js & node server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "ts-node scripts/seed-synthetic-data.ts",
-    "seed:users": "ts-node scripts/create-test-users.ts"
+    "seed": "ts-node -r dotenv/config scripts/seed-synthetic-data.ts",
+    "seed:users": "ts-node -r dotenv/config scripts/create-test-users.ts"
   },
   "keywords": [
     "padel",
